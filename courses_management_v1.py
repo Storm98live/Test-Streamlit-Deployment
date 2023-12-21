@@ -3,6 +3,8 @@ import streamlit as st
 import pandas as pd
 import io
 from streamlit_modal import Modal
+from openpyxl import Workbook
+from openpyxl.workbook.protection import WorkbookProtection
 
 # Function to process Excel file and store in session state
 def load_and_store_excel(file):
@@ -20,6 +22,7 @@ def question_details_modal(question_row, title):
             st.markdown("**Course Assigned:** " + str(question_row['courses']))
             for answer_label in ['A', 'B', 'C', 'D', 'E']:
                 st.markdown(f"**{answer_label}:** {question_row.get(answer_label, '')}")
+
 # Function to assign course and update the interface
 def assign_course(data, question, course, current_index):
     data.loc[data['questions'] == question, 'courses'] = course
@@ -29,12 +32,26 @@ def assign_course(data, question, course, current_index):
         st.session_state.current_index += 1
         st.experimental_rerun()
 
+# Function to export data to a password-protected Excel file
+def export_to_protected_excel(data, file_name, password):
+    workbook = Workbook()
+
+    # Create a Pandas Excel writer using openpyxl as the engine
+    with pd.ExcelWriter(file_name, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        data.to_excel(writer, index=False, sheet_name='Sheet1')
+
+    # Set a password for the entire workbook
+    workbook.security = WorkbookProtection(workbookPassword=password)
+
+    # Save the workbook
+    workbook.save(file_name)
+
 # Main Streamlit App Function
 def main():
     st.title("Course Assignment Interface")
 
     # File uploader
-    uploaded_file = st.sidebar.file_uploader("Upload Excel File", type=['xlsx'])
+    uploaded_file = st.sidebar.file_uploader("Upload Excel File", type=['csv'])
 
     if uploaded_file is not None:
         # Load and store the data in session state if not already done
@@ -79,12 +96,19 @@ def main():
             if st.button("Export Final Excel File"):
                 # Convert DataFrame to Excel
                 output = io.BytesIO()
+                excel_file_name = "final_data.xlsx"
+
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     st.session_state.data.to_excel(writer, index=False)
-                st.download_button(label="Download Excel File", 
-                                   data=output, 
-                                   file_name="final_data.xlsx", 
-                                   mime="application/vnd.ms-excel")
+
+                # Export to a password-protected Excel file
+                password = "your_password"  # Replace with your desired password
+                export_to_protected_excel(st.session_state.data, excel_file_name, password)
+
+                st.download_button(label="Download Excel File",
+                                data=output,
+                                file_name=excel_file_name,
+                                mime="application/vnd.ms-excel")
         else:
             st.write("All questions have been assigned courses.")
 
